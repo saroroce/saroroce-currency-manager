@@ -293,6 +293,7 @@ class PostType {
     public function registerSettings() {
         register_setting('currency_settings', 'currency_auto_update_enabled');
         register_setting('currency_settings', 'currency_update_interval');
+        register_setting('currency_settings', 'scm_auto_detect_currency');
     }
 
     public function renderSettingsPage() {
@@ -301,9 +302,14 @@ class PostType {
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
 
             <div class="currency-settings-page">
-                <!-- Добавляем кнопку обновления курсов -->
+                <!-- Добавляем кнопки -->
                 <div class="currency-actions">
+                    <button type="button" id="import-currencies" class="button button-primary">
+                        <span class="dashicons dashicons-download"></span>
+                        Импортировать валюты
+                    </button>
                     <button type="button" id="update-rates-manual" class="button button-primary">
+                        <span class="dashicons dashicons-update"></span>
                         Обновить курсы валют
                     </button>
                 </div>
@@ -322,6 +328,16 @@ class PostType {
                                 <label>
                                     <input type="checkbox" name="currency_auto_update_enabled" value="1" <?php checked($auto_update, '1'); ?>>
                                     Включить автоматическое обновление курсов валют
+                                </label>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <th scope="row">Автоопределение валюты</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="scm_auto_detect_currency" value="1" <?php checked(get_option('scm_auto_detect_currency', '0'), '1'); ?>>
+                                    Включить автоматическое определение валюты по стране посетителя
                                 </label>
                             </td>
                         </tr>
@@ -438,8 +454,17 @@ class PostType {
             
             $existing = get_posts([
                 'post_type' => 'currency',
-                'meta_key' => 'currency_code',
-                'meta_value' => $code,
+                'meta_query' => [
+                    'relation' => 'AND',
+                    [
+                        'key' => 'currency_code',
+                        'value' => $code
+                    ],
+                    [
+                        'key' => 'is_active',
+                        'value' => '1'
+                    ]
+                ],
                 'posts_per_page' => 1
             ]);
             
@@ -462,8 +487,17 @@ class PostType {
 
             $existing = get_posts([
                 'post_type' => 'currency',
-                'meta_key' => 'currency_code',
-                'meta_value' => $code,
+                'meta_query' => [
+                    'relation' => 'AND',
+                    [
+                        'key' => 'currency_code',
+                        'value' => $code
+                    ],
+                    [
+                        'key' => 'is_active',
+                        'value' => '1'
+                    ]
+                ],
                 'posts_per_page' => 1
             ]);
 
@@ -475,12 +509,15 @@ class PostType {
                 ]);
 
                 if ($post_id) {
+                    // Получаем массив символов валют WooCommerce
+                    $currency_symbols = get_woocommerce_currency_symbols();
+                    
                     // Устанавливаем метаданные с явным указанием значений
                     $meta_data = [
                         'currency_code' => $code,
-                        'currency_symbol' => get_woocommerce_currency_symbol($code),
+                        'currency_symbol' => $currency_symbols[$code] ?? $code, // Используем символ из массива или код валюты как запасной вариант
                         'currency_rate' => '0',
-                        'auto_update' => '1', // По умолчанию включено
+                        'auto_update' => '1',
                         'is_active' => '1'
                     ];
 

@@ -22,6 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Определяем константы плагина
+define('SCM_PLUGIN_ON', true);
 define('SCM_VERSION', '1.5');
 define('SCM_FILE', __FILE__);
 define('SCM_PATH', plugin_dir_path(SCM_FILE));
@@ -146,3 +147,49 @@ add_action('admin_enqueue_scripts', function ($hook) {
         }
     }
 });
+
+if (!function_exists('scm_get_current_currency')) {
+    function scm_get_current_currency()
+    {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getCurrentCurrency();
+    }
+}
+
+if (!function_exists('scm_set_user_currency')) {
+    function scm_set_user_currency($currency_code)
+    {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->setUserCurrency($currency_code);
+    }
+}
+
+if (!function_exists('scm_convert_price')) {
+    function scm_convert_price($price)
+    {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->convertPrice($price);
+    }
+}
+
+if (!function_exists('scm_get_currencies')) {
+    function scm_get_currencies()
+    {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getCurrencies();
+    }
+}
+
+if (!function_exists('scm_get_original_price')) {
+    function scm_get_original_price($product_id, $formatted = false) {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalPrice($product_id, $formatted);
+    }
+}
+
+if (!function_exists('scm_get_original_regular_price')) {
+    function scm_get_original_regular_price($product_id, $formatted = false) {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalRegularPrice($product_id, $formatted);
+    }
+}
+
+if (!function_exists('scm_get_original_sale_price')) {
+    function scm_get_original_sale_price($product_id, $formatted = false) {
+        return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalSalePrice($product_id, $formatted);
+    }
+}

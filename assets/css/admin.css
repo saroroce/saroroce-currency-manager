@@ -29,7 +29,10 @@
 }
 
 .currency-settings-page .button {
-    margin-right: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Иконки в списке */
@@ -87,7 +90,7 @@
 }
 
 /* Увеличиваем высоту выпадающего списка */
-.select2-container--default .select2-results > .select2-results__options {
+.select2-container--default .select2-results>.select2-results__options {
     max-height: 400px;
 }
 
@@ -96,10 +99,29 @@
 }
 
 .currency-actions {
-    margin-bottom: 30px;
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
 }
 
-#update-rates-manual {
+.currency-actions button {
+    margin-right: 10px;
     padding: 5px 15px;
     height: auto;
-} 
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.currency-actions button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+}
+
+.currency-actions button:last-child {
+    margin-right: 0;
+}

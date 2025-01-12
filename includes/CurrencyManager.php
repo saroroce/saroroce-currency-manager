@@ -24,14 +24,18 @@ class CurrencyManager
 
     public function __construct()
     {
+        error_log('CurrencyManager constructor called');
         $this->default_currency = get_woocommerce_currency();
         $this->cookie_name = 'scm_currency';
 
         // Добавляем глобальные функции
-        $this->addGlobalFunctions();
+        // $this->addGlobalFunctions();
 
         // Добавляем обработку параметра new_currency
         add_action('init', [$this, 'handleCurrencyParameter']);
+        
+        // Добавляем автоопределение валюты
+        add_action('wp_loaded', [$this, 'maybeSetCurrencyByIp'], 20);
 
         // Основные фильтры для цен WooCommerce
         add_filter('woocommerce_product_get_price', [$this, 'convertProductPrice'], 10, 2);
@@ -474,55 +478,42 @@ class CurrencyManager
 
     public function maybeSetCurrencyByIp()
     {
+        error_log('maybeSetCurrencyByIp called');
+        
         // Проверяем настройку автоопределения
         if (get_option('scm_auto_detect_currency', '0') !== '1') {
+            error_log('Auto detection is disabled');
             return;
         }
 
         // Проверяем, установлена ли уже валюта
         if (isset($_COOKIE[$this->cookie_name])) {
+            error_log('Currency cookie already set: ' . $_COOKIE[$this->cookie_name]);
             return;
         }
 
-        // Сначала пробуем получить геолокацию через WooCommerce
+        // Получаем геолокацию через WooCommerce
         $location = WC_Geolocation::geolocate_ip();
+        error_log('WC Geolocation result: ' . print_r($location, true));
         
         if (!empty($location['country'])) {
             $country_code = $location['country'];
-        } else {
-            // Если через WooCommerce не получилось, используем IP-API как запасной вариант
-            $ip = WC_Geolocation::get_ip_address();
+            error_log('Country code: ' . $country_code);
             
-            $response = wp_remote_get("http://ip-api.com/json/{$ip}", [
-                'timeout' => 5,
-                'sslverify' => false
-            ]);
-
-            if (!is_wp_error($response)) {
-                $data = json_decode(wp_remote_retrieve_body($response));
-                if ($data && isset($data->countryCode)) {
-                    $country_code = $data->countryCode;
-                }
-            }
-        }
-
-        if (!empty($country_code)) {
-            // Сначала пробуем получить валюту через WooCommerce
+            // Пробуем получить валюту через WooCommerce
             $currency = $this->getWooCommerceCurrencyByCountry($country_code);
+            error_log('Currency for country: ' . $currency);
             
-            // Если валюта не найдена через WooCommerce, используем наше сопоставление
-            if (!$currency) {
-                $currency = $this->getCurrencyByCountry($country_code);
-            }
-
             // Проверяем существование валюты в нашей системе
             if ($currency && $this->quickCurrencyCheck($currency)) {
+                error_log('Setting currency to: ' . $currency);
                 $this->setUserCurrency($currency);
                 return;
             }
         }
 
         // Если не удалось определить валюту, устанавливаем валюту по умолчанию
+        error_log('Setting default currency: ' . $this->default_currency);
         $this->setUserCurrency($this->default_currency);
     }
 
@@ -795,78 +786,6 @@ class CurrencyManager
 
         // Конвертируем цену
         return $price * $rate;
-    }
-
-    private function addGlobalFunctions()
-    {
-        // Добавляем глобальные функции в глобальное пространство имен
-        if (!function_exists('scm_get_current_currency')) {
-            function scm_get_current_currency()
-            {
-                return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getCurrentCurrency();
-            }
-        }
-
-        if (!function_exists('scm_set_user_currency')) {
-            function scm_set_user_currency($currency_code)
-            {
-                return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->setUserCurrency($currency_code);
-            }
-        }
-
-        if (!function_exists('scm_convert_price')) {
-            function scm_convert_price($price)
-            {
-                return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->convertPrice($price);
-            }
-        }
-
-        if (!function_exists('scm_get_currencies')) {
-            function scm_get_currencies()
-            {
-                $posts = get_posts([
-                    'post_type' => 'currency',
-                    'posts_per_page' => -1,
-                    'meta_query' => [
-                        [
-                            'key' => 'is_active',
-                            'value' => '1'
-                        ]
-                    ]
-                ]);
-
-                $currencies = [];
-                foreach ($posts as $post) {
-                    $currencies[$post->ID] = [
-                        'code' => get_post_meta($post->ID, 'currency_code', true),
-                        'name' => $post->post_title,
-                        'symbol' => get_post_meta($post->ID, 'currency_symbol', true),
-                        'rate' => get_post_meta($post->ID, 'currency_rate', true),
-                        'position' => get_post_meta($post->ID, 'currency_position', true)
-                    ];
-                }
-
-                return $currencies;
-            }
-        }
-
-        if (!function_exists('scm_get_original_price')) {
-            function scm_get_original_price($product_id, $formatted = false) {
-                return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalPrice($product_id, $formatted);
-            }
-        }
-
-        if (!function_exists('scm_get_original_regular_price')) {
-            function scm_get_original_regular_price($product_id, $formatted = false) {
-                return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalRegularPrice($product_id, $formatted);
-            }
-        }
-
-        if (!function_exists('scm_get_original_sale_price')) {
-            function scm_get_original_sale_price($product_id, $formatted = false) {
-                return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalSalePrice($product_id, $formatted);
-            }
-        }
     }
 
     public function saveCurrencyMeta($post_id, $post, $update = null)
@@ -1173,5 +1092,52 @@ class CurrencyManager
         }
 
         return $data['rates'][$to_currency];
+    }
+
+    public function getCurrencies()
+    {
+        // Получаем текущую валюту
+        $current_currency = $this->getCurrentCurrency();
+        
+        // Получаем все активные валюты
+        $posts = get_posts([
+            'post_type' => 'currency',
+            'posts_per_page' => -1,
+            'meta_query' => [
+                [
+                    'key' => 'is_active',
+                    'value' => '1'
+                ]
+            ],
+            'orderby' => 'title',
+            'order' => 'ASC'
+        ]);
+
+        // Разделяем текущую валюту и остальные
+        $current = null;
+        $others = [];
+
+        foreach ($posts as $post) {
+            $code = get_post_meta($post->ID, 'currency_code', true);
+            $currency_data = [
+                'code' => $code,
+                'name' => $post->post_title,
+                'symbol' => get_post_meta($post->ID, 'currency_symbol', true),
+                'rate' => get_post_meta($post->ID, 'currency_rate', true),
+                'position' => get_post_meta($post->ID, 'currency_position', true)
+            ];
+            
+            if ($code === $current_currency) {
+                $current = $currency_data;
+            } else {
+                $others[] = $currency_data;
+            }
+        }
+
+        // Объединяем массивы: сначала текущая валюта, потом остальные
+        return array_merge(
+            $current ? [$current] : [],
+            $others
+        );
     }
 }
