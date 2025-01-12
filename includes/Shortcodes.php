@@ -10,7 +10,6 @@ class Shortcodes {
 
     public function enqueueAssets() {
         wp_enqueue_style('scm-currency-switcher', SCM_URL . 'assets/css/currency-switcher.css', [], SCM_VERSION);
-        wp_enqueue_script('scm-currency-switcher', SCM_URL . 'assets/js/currency-switcher.js', ['jquery'], SCM_VERSION, true);
         
         wp_localize_script('scm-currency-switcher', 'scmData', [
             'ajaxUrl' => admin_url('admin-ajax.php'),

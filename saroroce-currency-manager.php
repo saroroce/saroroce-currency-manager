@@ -193,3 +193,7 @@ if (!function_exists('scm_get_original_sale_price')) {
         return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalSalePrice($product_id, $formatted);
     }
 }
+
+function scm_enqueue_assets() {
+    wp_enqueue_style('scm-currency-switcher', SCM_URL . 'assets/css/currency-switcher.css', [], SCM_VERSION);
+}
