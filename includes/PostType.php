@@ -26,6 +26,9 @@ class PostType {
         // AJAX обработчики
         add_action('wp_ajax_update_all_rates', [$this, 'ajaxUpdateAllRates']);
         add_action('wp_ajax_import_currencies', [$this, 'ajaxImportCurrencies']);
+
+        // Добавляем подключение скриптов
+        add_action('admin_enqueue_scripts', [$this, 'enqueueAdminScripts']);
     }
 
     public function registerPostType() {
@@ -295,52 +298,49 @@ class PostType {
     public function renderSettingsPage() {
         ?>
         <div class="wrap">
-            <h1>Настройки валют</h1>
+            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
 
-            <form method="post" action="options.php">
-                <?php
-                settings_fields('currency_settings');
-                $auto_update = get_option('currency_auto_update_enabled', '0');
-                $interval = get_option('currency_update_interval', 'daily');
-                ?>
+            <div class="currency-settings-page">
+                <!-- Добавляем кнопку обновления курсов -->
+                <div class="currency-actions">
+                    <button type="button" id="update-rates-manual" class="button button-primary">
+                        Обновить курсы валют
+                    </button>
+                </div>
 
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Автоматическое обновление курсов</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="currency_auto_update_enabled" value="1" <?php checked($auto_update, '1'); ?>>
-                                Включить автоматическое обновление курсов валют
-                            </label>
-                        </td>
-                    </tr>
+                <form method="post" action="options.php">
+                    <?php
+                    settings_fields('currency_settings');
+                    $auto_update = get_option('currency_auto_update_enabled', '0');
+                    $interval = get_option('currency_update_interval', 'daily');
+                    ?>
 
-                    <tr>
-                        <th scope="row">Интервал обновления</th>
-                        <td>
-                            <select name="currency_update_interval">
-                                <option value="hourly" <?php selected($interval, 'hourly'); ?>>Каждый час</option>
-                                <option value="twicedaily" <?php selected($interval, 'twicedaily'); ?>>Два раза в день</option>
-                                <option value="daily" <?php selected($interval, 'daily'); ?>>Раз в день</option>
-                            </select>
-                        </td>
-                    </tr>
-                </table>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">Автоматическое обновление курсов</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="currency_auto_update_enabled" value="1" <?php checked($auto_update, '1'); ?>>
+                                    Включить автоматическое обновление курсов валют
+                                </label>
+                            </td>
+                        </tr>
 
-                <?php submit_button(); ?>
-            </form>
+                        <tr>
+                            <th scope="row">Интервал обновления</th>
+                            <td>
+                                <select name="currency_update_interval">
+                                    <option value="hourly" <?php selected($interval, 'hourly'); ?>>Каждый час</option>
+                                    <option value="twicedaily" <?php selected($interval, 'twicedaily'); ?>>Два раза в день</option>
+                                    <option value="daily" <?php selected($interval, 'daily'); ?>>Раз в день</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
 
-            <hr>
-
-            <h2>Ручное обновление курсов</h2>
-            <p>Нажмите кнопку ниже, чтобы обновить курсы всех валют прямо сейчас.</p>
-            <button class="button button-primary" id="update-rates-manual">Обновить курсы валют</button>
-
-            <hr>
-
-            <h2>Импорт валют</h2>
-            <p>Импортировать все доступные валюты из WooCommerce.</p>
-            <button class="button" id="import-currencies">Импортировать валюты</button>
+                    <?php submit_button(); ?>
+                </form>
+            </div>
         </div>
         <?php
     }
@@ -841,5 +841,52 @@ class PostType {
             <?php endif; ?>
         </table>
         <?php
+    }
+
+    // Добавляем подключение скриптов для админки
+    public function enqueueAdminScripts($hook) 
+    {
+        // Подключаем скрипты только на нужных страницах
+        if ($hook === 'currency_page_currency-settings' || 
+            ($hook === 'post.php' && get_post_type() === 'currency') || 
+            ($hook === 'post-new.php' && get_post_type() === 'currency')) {
+            
+            // Подключаем Select2
+            wp_enqueue_style(
+                'select2',
+                'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+                [],
+                '4.1.0'
+            );
+            
+            wp_enqueue_script(
+                'select2',
+                'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+                ['jquery'],
+                '4.1.0',
+                true
+            );
+
+            // Подключаем наши скрипты
+            wp_enqueue_style(
+                'scm-admin',
+                plugins_url('/assets/css/admin.css', SCM_FILE),
+                ['select2'],
+                SCM_VERSION
+            );
+            
+            wp_enqueue_script(
+                'scm-admin',
+                plugins_url('/assets/js/admin.js', SCM_FILE),
+                ['jquery', 'select2'],
+                SCM_VERSION,
+                true
+            );
+
+            wp_localize_script('scm-admin', 'scmAdmin', [
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('currency_action')
+            ]);
+        }
     }
 } 

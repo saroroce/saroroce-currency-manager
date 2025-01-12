@@ -53,6 +53,7 @@ class CurrencyManager
         // AJAX обработчики
         add_action('wp_ajax_scm_change_currency', [$this, 'ajaxChangeCurrency']);
         add_action('wp_ajax_nopriv_scm_change_currency', [$this, 'ajaxChangeCurrency']);
+        add_action('wp_ajax_update_all_rates', [$this, 'ajaxUpdateAllRates']);
 
         // Добавляем хуки для сохранения оригинальной цены
         add_action('woocommerce_process_product_meta', [$this, 'saveOriginalPrice'], 10, 1);
@@ -1069,5 +1070,108 @@ class CurrencyManager
         return $formatted 
             ? get_post_meta($product_id, '_original_sale_price_formatted', true)
             : get_post_meta($product_id, '_original_sale_price', true);
+    }
+
+    /**
+     * AJAX обработчик для обновления курсов валют
+     */
+    public function ajaxUpdateAllRates()
+    {
+        // Проверяем права доступа
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Недостаточно прав']);
+            return;
+        }
+
+        // Проверяем nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'currency_action')) {
+            wp_send_json_error(['message' => 'Ошибка безопасности']);
+            return;
+        }
+
+        try {
+            // Получаем все активные валюты
+            $currencies = get_posts([
+                'post_type' => 'currency',
+                'posts_per_page' => -1,
+                'meta_query' => [
+                    [
+                        'key' => 'auto_update',
+                        'value' => '1'
+                    ]
+                ]
+            ]);
+
+            $updated = 0;
+            $errors = [];
+
+            foreach ($currencies as $currency) {
+                $currency_code = get_post_meta($currency->ID, 'currency_code', true);
+                
+                // Пропускаем основную валюту
+                if ($currency_code === $this->default_currency) {
+                    continue;
+                }
+
+                try {
+                    // Получаем курс через API
+                    $rate = $this->fetchExchangeRate($this->default_currency, $currency_code);
+                    
+                    if ($rate) {
+                        update_post_meta($currency->ID, 'currency_rate', $rate);
+                        $updated++;
+                    }
+                } catch (Exception $e) {
+                    $errors[] = sprintf('Ошибка обновления %s: %s', $currency_code, $e->getMessage());
+                }
+            }
+
+            // Очищаем кэш
+            $this->clearCache();
+
+            if (!empty($errors)) {
+                wp_send_json_error([
+                    'message' => sprintf('Обновлено валют: %d. Ошибки: %s', $updated, implode(', ', $errors))
+                ]);
+                return;
+            }
+
+            wp_send_json_success([
+                'message' => sprintf('Успешно обновлено валют: %d', $updated)
+            ]);
+
+        } catch (Exception $e) {
+            wp_send_json_error([
+                'message' => 'Ошибка обновления курсов: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Получение курса валюты через API
+     */
+    private function fetchExchangeRate($from_currency, $to_currency)
+    {
+        // API URL (можно заменить на другой сервис)
+        $api_url = sprintf(
+            'https://api.exchangerate-api.com/v4/latest/%s',
+            urlencode($from_currency)
+        );
+
+        // Получаем данные
+        $response = wp_remote_get($api_url);
+
+        if (is_wp_error($response)) {
+            throw new Exception($response->get_error_message());
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!isset($data['rates'][$to_currency])) {
+            throw new Exception('Курс не найден');
+        }
+
+        return $data['rates'][$to_currency];
     }
 }

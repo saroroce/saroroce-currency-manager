@@ -1,4 +1,7 @@
 jQuery(document).ready(function($) {
+    // Добавляем отладочный вывод
+    console.log('Admin JS loaded');
+    
     // Инициализируем Select2 для селекта валют
     $('#currency_code').select2({
         width: '100%',
@@ -55,24 +58,31 @@ jQuery(document).ready(function($) {
 
     // Обработчик для кнопки обновления курсов
     $('#update-rates-manual').on('click', function(e) {
+        console.log('Update rates button clicked'); // Отладочный вывод
+        
         e.preventDefault();
         const $button = $(this);
+        
+        // Блокируем кнопку
         $button.prop('disabled', true).text('Обновление...');
 
+        // Отправляем AJAX запрос
         $.post(scmAdmin.ajaxurl, {
             action: 'update_all_rates',
             nonce: scmAdmin.nonce
         }, function(response) {
-            const message = response.data && response.data.message ? response.data.message : 'Неизвестная ошибка';
-            alert(message);
+            console.log('AJAX response:', response); // Отладочный вывод
             
             if (response.success) {
+                alert(response.data.message);
                 location.reload();
             } else {
+                alert(response.data.message || 'Произошла ошибка');
                 $button.prop('disabled', false).text('Обновить курсы валют');
             }
-        }).fail(function() {
-            alert('Ошибка сервера. Попробуйте позже.');
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error('AJAX error:', textStatus, errorThrown); // Отладочный вывод
+            alert('Ошибка сервера');
             $button.prop('disabled', false).text('Обновить курсы валют');
         });
     });
