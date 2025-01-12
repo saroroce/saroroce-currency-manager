@@ -1,0 +1,134 @@
+.scm-currency-switcher {
+    display: inline-block;
+    position: relative;
+    min-width: 120px;
+}
+
+.scm-currency-switcher .scm-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #333;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    transition: all 0.3s ease;
+}
+
+.scm-currency-switcher::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #333;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.scm-currency-switcher .scm-select:hover {
+    border-color: #999;
+}
+
+.scm-currency-switcher .scm-select:focus {
+    outline: none;
+    border-color: #666;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+}
+
+.scm-currency-switcher .scm-select:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.scm-currency-switcher .scm-select.loading {
+    background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2050%2050%22%3E%3Cpath%20fill%3D%22%23333%22%20d%3D%22M25%201c-6.52%200-7.34.03-9.9.14-2.55.12-4.3.53-5.82%201.12a11.76%2011.76%200%200%200-4.25%202.77%2011.76%2011.76%200%200%200-2.77%204.25c-.6%201.52-1%203.27-1.12%205.82C1.03%2017.66%201%2018.48%201%2025s.03%207.34.14%209.9c.12%202.55.53%204.3%201.12%205.82a11.76%2011.76%200%200%200%202.77%204.25%2011.76%2011.76%200%200%200%204.25%202.77c1.52.6%203.27%201%205.82%201.12%202.56.11%203.38.14%209.9.14s7.34-.03%209.9-.14c2.55-.12%204.3-.53%205.82-1.12a11.76%2011.76%200%200%200%204.25-2.77%2011.76%2011.76%200%200%200%202.77-4.25c.6-1.52%201-3.27%201.12-5.82.11-2.56.14-3.38.14-9.9s-.03-7.34-.14-9.9c-.12-2.55-.53-4.3-1.12-5.82a11.76%2011.76%200%200%200-2.77-4.25%2011.76%2011.76%200%200%200-4.25-2.77c-1.52-.6-3.27-1-5.82-1.12C32.34%201.03%2031.52%201%2025%201zm0%204.32c6.4%200%207.16.03%209.69.14%202.34.11%203.61.5%204.45.83%201.12.43%201.92.95%202.76%201.79a7.43%207.43%200%200%201%201.79%202.76c.33.84.72%202.11.83%204.45.11%202.53.14%203.29.14%209.69s-.03%207.16-.14%209.69c-.11%202.34-.5%203.61-.83%204.45-.43%201.12-.95%201.92-1.79%202.76a7.43%207.43%200%200%201-2.76%201.79c-.84.33-2.11.72-4.45.83-2.53.11-3.29.14-9.69.14s-7.16-.03-9.69-.14c-2.34-.11-3.61-.5-4.45-.83-1.12-.43-1.92-.95-2.76-1.79a7.43%207.43%200%200%201-1.79-2.76c-.33-.84-.72-2.11-.83-4.45-.11-2.53-.14-3.29-.14-9.69s.03-7.16.14-9.69c.11-2.34.5-3.61.83-4.45.43-1.12.95-1.92%201.79-2.76a7.43%207.43%200%200%201%202.76-1.79c.84-.33%202.11-.72%204.45-.83%202.53-.11%203.29-.14%209.69-.14z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 30px center;
+    background-size: 16px;
+    animation: scm-rotate 1s linear infinite;
+}
+
+@keyframes scm-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.select2-container {
+    min-width: 120px;
+}
+
+.select2-container--default .select2-selection--single {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    height: 34px;
+    background-color: #fff;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 32px;
+    padding-left: 12px;
+    padding-right: 30px;
+    color: #333;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 32px;
+    width: 30px;
+}
+
+.select2-dropdown {
+    border-color: #ddd;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #0073aa;
+}
+
+.select2-container--default .select2-results__option {
+    padding: 8px 12px;
+}
+
+/* Темная тема */
+.dark-mode .select2-container--default .select2-selection--single {
+    background-color: #333;
+    border-color: #444;
+}
+
+.dark-mode .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #fff;
+}
+
+.dark-mode .select2-dropdown {
+    background-color: #333;
+    border-color: #444;
+}
+
+.dark-mode .select2-container--default .select2-results__option {
+    color: #fff;
+}
+
+.dark-mode .select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: #444;
+}
+
+/* Мобильная версия */
+@media (max-width: 768px) {
+    .select2-container {
+        width: 100% !important;
+    }
+} 
