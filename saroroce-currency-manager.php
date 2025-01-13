@@ -120,15 +120,6 @@ add_action('init', function () {
     }
 });
 
-// Добавляем поддержку AJAX
-add_action('wp_enqueue_scripts', function () {
-    wp_enqueue_script('scm-currency-switcher', SCM_URL . 'assets/js/currency-switcher.js', ['jquery'], SCM_VERSION, true);
-    wp_localize_script('scm-currency-switcher', 'scmData', array(
-        'ajaxUrl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('scm_change_currency')
-    ));
-});
-
 // Добавляем скрипты для админки
 add_action('admin_enqueue_scripts', function ($hook) {
     if ($hook == 'post-new.php' || $hook == 'post.php') {
