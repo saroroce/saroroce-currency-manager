@@ -10,8 +10,6 @@ class CurrencyManager
     private static $instance = null;
     private $cookie_name = 'scm_currency';
     private $cookie_expiry = YEAR_IN_SECONDS;
-    private $rates_cache = [];
-    private $is_checking_currency = false;
     private $default_currency = null;
     private static $initialized = false;
     private $current_currency = null;
@@ -31,7 +29,6 @@ class CurrencyManager
         }
         self::$initialized = true;
 
-        error_log('CurrencyManager constructor called');
         $this->default_currency = get_woocommerce_currency();
 
         // Добавляем глобальные функции
@@ -39,7 +36,7 @@ class CurrencyManager
 
         // Добавляем обработку параметра new_currency
         add_action('init', [$this, 'handleCurrencyParameter']);
-        
+
         // Добавляем автоопределение валюты
         add_action('wp_loaded', [$this, 'maybeSetCurrencyByIp'], 20);
 
@@ -54,21 +51,19 @@ class CurrencyManager
         // Фильтры для отображения
         add_filter('woocommerce_currency_symbol', [$this, 'filterWoocommerceCurrencySymbol'], 10, 2);
         add_filter('woocommerce_price_format', [$this, 'getPriceFormat'], 10, 2);
-        
+
         // Добавляем фильтр валюты только для фронтенда
         if (!is_admin()) {
             add_filter('woocommerce_currency', [$this, 'filterWoocommerceCurrency'], 999, 1);
         }
-        
+
         // AJAX обработчики
-        add_action('wp_ajax_scm_change_currency', [$this, 'ajaxChangeCurrency']);
-        add_action('wp_ajax_nopriv_scm_change_currency', [$this, 'ajaxChangeCurrency']);
         add_action('wp_ajax_update_all_rates', [$this, 'ajaxUpdateAllRates']);
 
         // Добавляем хуки для сохранения оригинальной цены
         add_action('woocommerce_process_product_meta', [$this, 'saveOriginalPrice'], 10, 1);
         add_action('woocommerce_save_product_variation', [$this, 'saveOriginalPrice'], 10, 1);
-        
+
         // Добавляем колонку с оригинальной ценой в админке
         add_filter('manage_product_posts_columns', [$this, 'addOriginalPriceColumn']);
         add_action('manage_product_posts_custom_column', [$this, 'renderOriginalPriceColumn'], 10, 2);
@@ -89,10 +84,10 @@ class CurrencyManager
 
         $is_filtering = true;
 
-        $current_currency = $this->getCurrentCurrency();
+        $this->current_currency = $this->getCurrentCurrency();
 
         // Если текущая валюта совпадает с основной - возвращаем исходное значение
-        if ($current_currency === $this->default_currency) {
+        if ($this->current_currency === $this->default_currency) {
             $is_filtering = false;
             return $return;
         }
@@ -105,7 +100,7 @@ class CurrencyManager
                 'relation' => 'AND',
                 [
                     'key' => 'currency_code',
-                    'value' => $current_currency
+                    'value' => $this->current_currency
                 ],
                 [
                     'key' => 'is_active',
@@ -133,7 +128,7 @@ class CurrencyManager
         $position = get_post_meta($currencies[0]->ID, 'currency_position', true);
 
         // Обновляем аргументы
-        $args['currency'] = $current_currency;
+        $args['currency'] = $this->current_currency;
         $args['currency_symbol'] = $symbol;
 
         // Устанавливаем формат в зависимости от позиции
@@ -168,42 +163,16 @@ class CurrencyManager
 
     public function getCurrentCurrency()
     {
-        static $current_currency = null;
-
-        // Возвращаем кэшированное значение, если оно есть
-        if ($current_currency !== null) {
-            return $current_currency;
+        $current_currency = isset($_COOKIE[$this->cookie_name]) ? $_COOKIE[$this->cookie_name] : $this->default_currency;
+        
+        // Всегда устанавливаем актуальные заголовки если возможно
+        if (!headers_sent()) {
+            header_remove('X-' . $this->cookie_name); // Удаляем старый заголовок если есть
+            header('Cache-Control: no-store, private');
+            header('Vary: Cookie, X-' . $this->cookie_name);
+            header('X-' . $this->cookie_name . ': ' . $current_currency);
         }
-
-        // Проверяем параметр URL
-        if (isset($_GET['new_currency'])) {
-            $currency = sanitize_text_field($_GET['new_currency']);
-            if ($this->quickCurrencyCheck($currency)) {
-                $current_currency = $currency;
-                return $current_currency;
-            }
-        }
-
-        // Проверяем куки
-        if (isset($_COOKIE[$this->cookie_name])) {
-            $currency = sanitize_text_field($_COOKIE[$this->cookie_name]);
-            if ($this->quickCurrencyCheck($currency)) {
-                $current_currency = $currency;
-                return $current_currency;
-            }
-        }
-
-        // Проверяем сессию WooCommerce
-        if (function_exists('WC') && WC()->session && WC()->session->get('selected_currency')) {
-            $currency = WC()->session->get('selected_currency');
-            if ($this->quickCurrencyCheck($currency)) {
-                $current_currency = $currency;
-                return $current_currency;
-            }
-        }
-
-        // Возвращаем валюту по умолчанию
-        $current_currency = $this->default_currency;
+        
         return $current_currency;
     }
 
@@ -242,63 +211,44 @@ class CurrencyManager
 
     public function setUserCurrency($currency_code)
     {
-        try {
-            $currency_code = sanitize_text_field($currency_code);
-            
-            error_log('Currency Manager: Attempting to set currency: ' . $currency_code);
-            
-            if (!$this->quickCurrencyCheck($currency_code)) {
-                error_log('Currency check failed for: ' . $currency_code);
-                return false;
+        // Получаем основной домен
+        $domain = '';
+        if (defined('COOKIE_DOMAIN') && COOKIE_DOMAIN) {
+            $domain = COOKIE_DOMAIN;
+        } else {
+            $parsed = parse_url(home_url());
+            $domain = isset($parsed['host']) ? $parsed['host'] : '';
+            // Убираем www если есть
+            if (strpos($domain, 'www.') === 0) {
+                $domain = substr($domain, 4);
             }
-
-            // Устанавливаем куки напрямую
-            $cookie_result = setcookie(
-                $this->cookie_name,
-                $currency_code,
-                [
-                    'expires' => time() + $this->cookie_expiry,
-                    'path' => COOKIEPATH,
-                    'domain' => COOKIE_DOMAIN,
-                    'secure' => is_ssl(),
-                    'httponly' => true,
-                    'samesite' => 'Lax'
-                ]
-            );
-            
-            error_log('Cookie set result: ' . ($cookie_result ? 'success' : 'failed'));
-            error_log('Cookie parameters: ' . print_r([
-                'name' => $this->cookie_name,
-                'value' => $currency_code,
-                'path' => COOKIEPATH,
-                'domain' => COOKIE_DOMAIN,
-                'secure' => is_ssl(),
-            ], true));
-
-            // Обновляем глобальную переменную $_COOKIE
-            $_COOKIE[$this->cookie_name] = $currency_code;
-            
-            // Обновляем сессию WooCommerce
-            if (function_exists('WC') && WC()->session) {
-                WC()->session->set('selected_currency', $currency_code);
-                error_log('WooCommerce session updated');
-            }
-
-            // Очищаем все виды кэша
-            $this->clearCache();
-            error_log('Cache cleared');
-
-            // Сбрасываем статический кэш getCurrentCurrency
-            $this->current_currency = null;
-
-            do_action('scm_currency_changed', $currency_code);
-            error_log('Currency change action triggered');
-            
-            return true;
-        } catch (Exception $e) {
-            error_log('Currency Manager: Failed to set currency - ' . $e->getMessage());
-            return false;
         }
+        
+        // Устанавливаем куки с правильными параметрами
+        $secure = is_ssl();
+        
+        setcookie(
+            $this->cookie_name,
+            $currency_code,
+            [
+                'expires' => time() + $this->cookie_expiry,
+                'path' => '/',
+                'domain' => '.' . $domain, // Добавляем точку перед доменом для работы на поддоменах
+                'secure' => $secure,
+                'httponly' => false,
+                'samesite' => 'Lax'
+            ]
+        );
+        
+        // Устанавливаем куки также в $_COOKIE для немедленного использования
+        $_COOKIE[$this->cookie_name] = $currency_code;
+        
+        if (!headers_sent()) {
+            header('Vary: X-' . $this->cookie_name);
+            header('X-' . $this->cookie_name . ': ' . $currency_code);
+        }
+        
+        return $currency_code;
     }
 
     public function convertPrice($price, $product = null)
@@ -397,10 +347,6 @@ class CurrencyManager
             }
         }
 
-        if ($updated > 0) {
-            $this->clearCache();
-        }
-
         return $updated;
     }
 
@@ -432,207 +378,113 @@ class CurrencyManager
 
     public function getCurrencyRate($currency_code)
     {
-        if (!isset($this->rates_cache['single_' . $currency_code])) {
-            $currencies = get_posts([
-                'post_type' => 'currency',
-                'posts_per_page' => 1,
-                'meta_query' => [
-                    'relation' => 'AND',
-                    [
-                        'key' => 'currency_code',
-                        'value' => $currency_code
-                    ],
-                    [
-                        'key' => 'is_active',
-                        'value' => '1'
-                    ]
-                ]
-            ]);
-
-            if (empty($currencies)) {
-                $this->rates_cache['single_' . $currency_code] = false;
-            } else {
-                $rate = get_post_meta($currencies[0]->ID, 'currency_rate', true);
-                $this->rates_cache['single_' . $currency_code] = $rate ? (float) $rate : false;
-            }
-        }
-
-        return $this->rates_cache['single_' . $currency_code];
-    }
-
-    public function ajaxChangeCurrency()
-    {
-        try {
-            // Проверяем nonce
-            if (!check_ajax_referer('scm_change_currency', 'nonce', false)) {
-                throw new Exception('Security check failed');
-            }
-
-            if (!isset($_POST['currency']) || empty($_POST['currency'])) {
-                throw new Exception('Currency not specified');
-            }
-
-            $currency = sanitize_text_field($_POST['currency']);
-
-            // Проверяем существование и активность валюты
-            if (!$this->quickCurrencyCheck($currency)) {
-                throw new Exception('Invalid or inactive currency');
-            }
-
-            // Устанавливаем куки напрямую
-            setcookie(
-                $this->cookie_name,
-                $currency,
+        $rates = [];
+        $currencies = get_posts([
+            'post_type' => 'currency',
+            'posts_per_page' => 1,
+            'meta_query' => [
+                'relation' => 'AND',
                 [
-                    'expires' => time() + $this->cookie_expiry,
-                    'path' => COOKIEPATH,
-                    'domain' => COOKIE_DOMAIN,
-                    'secure' => is_ssl(),
-                    'httponly' => true,
-                    'samesite' => 'Lax'
+                    'key' => 'currency_code',
+                    'value' => $currency_code
+                ],
+                [
+                    'key' => 'is_active',
+                    'value' => '1'
                 ]
-            );
+            ]
+        ]);
 
-            $_COOKIE[$this->cookie_name] = $currency;
-
-            // Обновляем сессию WooCommerce
-            if (function_exists('WC') && WC()->session) {
-                WC()->session->set('selected_currency', $currency);
-            }
-
-            // Очищаем кэш
-            $this->clearCache();
-
-            do_action('scm_currency_changed', $currency);
-
-            wp_send_json_success([
-                'currency' => $currency,
-                'symbol' => $this->getCurrencySymbol('', $currency),
-                'message' => 'Currency changed successfully',
-                'reload' => true
-            ]);
-
-        } catch (Exception $e) {
-            wp_send_json_error([
-                'message' => $e->getMessage(),
-                'code' => 'error',
-                'debug' => [
-                    'currency' => isset($currency) ? $currency : null,
-                    'cookie_name' => $this->cookie_name,
-                    'cookie_exists' => isset($_COOKIE[$this->cookie_name])
-                ]
-            ]);
+        if (empty($currencies)) {
+            $rates['single_' . $currency_code] = false;
+        } else {
+            $rate = get_post_meta($currencies[0]->ID, 'currency_rate', true);
+            $rates['single_' . $currency_code] = $rate ? (float) $rate : false;
         }
+
+        return $rates['single_' . $currency_code];
     }
 
     public function maybeSetCurrencyByIp()
     {
-        error_log('maybeSetCurrencyByIp called');
-        
+
         // Проверяем настройку автоопределения
         $auto_detect = get_option('scm_auto_detect_currency', '0');
-        error_log('Auto detect setting: ' . $auto_detect);
-        
+
         if ($auto_detect !== '1') {
-            error_log('Auto detection is disabled');
             return;
         }
 
         // Проверяем, установлена ли уже валюта
         if (isset($_COOKIE[$this->cookie_name])) {
-            error_log('Currency cookie already set: ' . $_COOKIE[$this->cookie_name]);
             return;
         }
 
         // Получаем геолокацию через WooCommerce
         $location = WC_Geolocation::geolocate_ip();
-        error_log('WC Geolocation result: ' . print_r($location, true));
-        
+
         if (!empty($location['country'])) {
             $country_code = $location['country'];
-            error_log('Country code: ' . $country_code);
-            
+
             // Пробуем получить валюту через WooCommerce
             $currency = $this->getWooCommerceCurrencyByCountry($country_code);
-            error_log('Currency for country: ' . $currency);
-            
+
             // Проверяем существование валюты в нашей системе
             if ($currency && $this->quickCurrencyCheck($currency)) {
-                error_log('Setting currency to: ' . $currency);
                 $this->setUserCurrency($currency);
                 return;
             }
         }
 
         // Если не удалось определить валюту, устанавливаем валюту по умолчанию
-        error_log('Setting default currency: ' . $this->default_currency);
         $this->setUserCurrency($this->default_currency);
     }
 
-    private function getWooCommerceCurrencyByCountry($country_code) 
+    private function getWooCommerceCurrencyByCountry($country_code)
     {
         // Получаем все доступные валюты WooCommerce
         $wc_currencies = get_woocommerce_currencies();
-        
+
         // Получаем базовую локацию магазина
         $base_location = wc_get_base_location();
-        
+
         // Пытаемся определить валюту по стране
         $currency = false;
-        
+
         // Проверяем специальные случаи для стран еврозоны
         $eurozone_countries = [
-            'DE', 'FR', 'IT', 'ES', 'PT', 'GR', 'AT', 'BE', 'IE', 'NL', 
-            'FI', 'SK', 'SI', 'EE', 'LV', 'LT', 'LU', 'MT', 'CY'
+            'DE',
+            'FR',
+            'IT',
+            'ES',
+            'PT',
+            'GR',
+            'AT',
+            'BE',
+            'IE',
+            'NL',
+            'FI',
+            'SK',
+            'SI',
+            'EE',
+            'LV',
+            'LT',
+            'LU',
+            'MT',
+            'CY'
         ];
-        
+
         if (in_array($country_code, $eurozone_countries)) {
             return 'EUR';
         }
-        
+
         // Используем встроенное сопоставление WooCommerce, если оно доступно
         $locale_info = include WC()->plugin_path() . '/i18n/locale-info.php';
         if (isset($locale_info[$country_code]['currency_code'])) {
             $currency = $locale_info[$country_code]['currency_code'];
         }
-        
+
         return $currency;
-    }
-
-    private function getCurrencyByCountry($country_code)
-    {
-        // Расширенная карта соответствия стран и валют
-        $currency_map = [
-            'US' => 'USD', // США
-            'GB' => 'GBP', // Великобритания
-            'EU' => 'EUR', // Европейский союз
-            'RU' => 'RUB', // Россия
-            'BG' => 'BGN', // Болгария
-            'BY' => 'BYN', // Беларусь
-            'KZ' => 'KZT', // Казахстан
-            'UA' => 'UAH', // Украина
-            'CN' => 'CNY', // Китай
-            'JP' => 'JPY', // Япония
-            // Страны еврозоны
-            'DE' => 'EUR', // Германия
-            'FR' => 'EUR', // Франция
-            'IT' => 'EUR', // Италия
-            'ES' => 'EUR', // Испания
-            'PT' => 'EUR', // Португалия
-            'GR' => 'EUR', // Греция
-            'AT' => 'EUR', // Австрия
-            'BE' => 'EUR', // Бельгия
-            'IE' => 'EUR', // Ирландия
-            'NL' => 'EUR', // Нидерланды
-            'FI' => 'EUR', // Финляндия
-            'SK' => 'EUR', // Словакия
-            'SI' => 'EUR', // Словения
-            'EE' => 'EUR', // Эстония
-            'LV' => 'EUR', // Латвия
-            'LT' => 'EUR', // Литва
-        ];
-
-        return isset($currency_map[$country_code]) ? $currency_map[$country_code] : 'USD';
     }
 
     public function getCurrencySymbol($symbol, $currency = '')
@@ -755,35 +607,6 @@ class CurrencyManager
         return $where;
     }
 
-    private function clearCache()
-    {
-        // Очищаем кэш WooCommerce
-        if (function_exists('WC')) {
-            \WC_Cache_Helper::get_transient_version('product', true);
-            wc_delete_product_transients();
-            
-            if (WC()->cart) {
-                WC()->cart->calculate_totals();
-            }
-
-            if (WC()->session) {
-                WC()->session->set('exchange_rate_cache', null);
-            }
-        }
-
-        // Очищаем внутренний кэш курсов
-        $this->rates_cache = [];
-
-        // Очищаем кэш страниц
-        wp_cache_flush();
-
-        // Очищаем кэш объектов
-        wp_cache_delete('scm_currencies', 'options');
-        
-        // Сбрасываем кэш запросов
-        wp_cache_delete('scm_current_currency', 'options');
-    }
-
     public function checkCurrencyAvailability()
     {
         check_ajax_referer('scm_admin', 'nonce');
@@ -833,15 +656,15 @@ class CurrencyManager
             return $price;
         }
 
-        $current_currency = $this->getCurrentCurrency();
+        $this->current_currency = $this->getCurrentCurrency();
 
         // Если текущая валюта совпадает с основной - ничего не меняем
-        if ($current_currency === $this->default_currency) {
+        if ($this->current_currency === $this->default_currency) {
             return $price;
         }
 
         // Получаем курс валюты
-        $rate = $this->getCurrencyRate($current_currency);
+        $rate = $this->getCurrencyRate($this->current_currency);
         if (!$rate) {
             return $price;
         }
@@ -880,31 +703,22 @@ class CurrencyManager
         } else {
             update_post_meta($post_id, 'auto_update', '0');
         }
-
-        // Очищаем кэш после сохранения
-        $this->clearCache();
     }
 
     public function handleCurrencyParameter()
     {
-        // Проверяем наличие параметра new_currency
         if (isset($_GET['new_currency'])) {
             $new_currency = sanitize_text_field($_GET['new_currency']);
             
-            error_log('Currency Manager: Handling currency change request');
-            error_log('New currency: ' . $new_currency);
-            error_log('Current cookies: ' . print_r($_COOKIE, true));
+            // Устанавливаем валюту
+            $this->setUserCurrency($new_currency);
             
-            // Устанавливаем новую валюту
-            if ($this->setUserCurrency($new_currency)) {
-                error_log('Currency set successfully, redirecting...');
-                // Удаляем параметр из URL и делаем редирект
-                $redirect_url = remove_query_arg('new_currency');
-                wp_safe_redirect($redirect_url);
-                exit;
-            } else {
-                error_log('Failed to set currency');
-            }
+            // Получаем текущий URL без параметра new_currency
+            $redirect_url = remove_query_arg('new_currency');
+            
+            // Делаем редирект с сохранением куки
+            wp_redirect($redirect_url, 302);
+            exit;
         }
     }
 
@@ -919,9 +733,9 @@ class CurrencyManager
 
         $is_converting = true;
 
-        $current_currency = $this->getCurrentCurrency();
-        
-        if ($current_currency === $this->default_currency) {
+        $this->current_currency = $this->getCurrentCurrency();
+
+        if ($this->current_currency === $this->default_currency) {
             $is_converting = false;
             return $price;
         }
@@ -929,7 +743,7 @@ class CurrencyManager
         // Пробуем получить оригинальную цену
         $product_id = $product->get_id();
         $original_price = '';
-        
+
         if ($product->is_on_sale()) {
             $original_price = get_post_meta($product_id, '_original_sale_price', true);
         } else {
@@ -941,7 +755,7 @@ class CurrencyManager
             $price = $original_price;
         }
 
-        $rate = $this->getCurrencyRate($current_currency);
+        $rate = $this->getCurrencyRate($this->current_currency);
         if (!$rate) {
             $is_converting = false;
             return $price;
@@ -974,7 +788,7 @@ class CurrencyManager
     /**
      * Сохраняем оригинальную цену при сохранении товара
      */
-    public function saveOriginalPrice($post_id) 
+    public function saveOriginalPrice($post_id)
     {
         // Получаем текущую цену товара
         $product = wc_get_product($post_id);
@@ -987,14 +801,20 @@ class CurrencyManager
         if ($regular_price) {
             update_post_meta($post_id, '_original_regular_price', $regular_price);
             // Сохраняем отформатированную цену
-            update_post_meta($post_id, '_original_regular_price_formatted', 
-                wc_price($regular_price, ['currency' => $this->default_currency]));
+            update_post_meta(
+                $post_id,
+                '_original_regular_price_formatted',
+                wc_price($regular_price, ['currency' => $this->default_currency])
+            );
         }
 
         if ($sale_price) {
             update_post_meta($post_id, '_original_sale_price', $sale_price);
-            update_post_meta($post_id, '_original_sale_price_formatted', 
-                wc_price($sale_price, ['currency' => $this->default_currency]));
+            update_post_meta(
+                $post_id,
+                '_original_sale_price_formatted',
+                wc_price($sale_price, ['currency' => $this->default_currency])
+            );
         }
     }
 
@@ -1021,7 +841,7 @@ class CurrencyManager
         if ($column === 'original_price') {
             $regular_price = get_post_meta($post_id, '_original_regular_price_formatted', true);
             $sale_price = get_post_meta($post_id, '_original_sale_price_formatted', true);
-            
+
             if ($sale_price) {
                 echo '<del>' . $regular_price . '</del> ' . $sale_price;
             } else {
@@ -1030,32 +850,32 @@ class CurrencyManager
         }
     }
 
-    public function getOriginalPrice($product_id, $formatted = false) 
+    public function getOriginalPrice($product_id, $formatted = false)
     {
         $product = wc_get_product($product_id);
         if (!$product) return false;
 
         if ($product->is_on_sale()) {
-            return $formatted 
+            return $formatted
                 ? get_post_meta($product_id, '_original_sale_price_formatted', true)
                 : get_post_meta($product_id, '_original_sale_price', true);
         }
 
-        return $formatted 
+        return $formatted
             ? get_post_meta($product_id, '_original_regular_price_formatted', true)
             : get_post_meta($product_id, '_original_regular_price', true);
     }
 
-    public function getOriginalRegularPrice($product_id, $formatted = false) 
+    public function getOriginalRegularPrice($product_id, $formatted = false)
     {
-        return $formatted 
+        return $formatted
             ? get_post_meta($product_id, '_original_regular_price_formatted', true)
             : get_post_meta($product_id, '_original_regular_price', true);
     }
 
-    public function getOriginalSalePrice($product_id, $formatted = false) 
+    public function getOriginalSalePrice($product_id, $formatted = false)
     {
-        return $formatted 
+        return $formatted
             ? get_post_meta($product_id, '_original_sale_price_formatted', true)
             : get_post_meta($product_id, '_original_sale_price', true);
     }
@@ -1095,7 +915,7 @@ class CurrencyManager
 
             foreach ($currencies as $currency) {
                 $currency_code = get_post_meta($currency->ID, 'currency_code', true);
-                
+
                 // Пропускаем основную валюту
                 if ($currency_code === $this->default_currency) {
                     continue;
@@ -1104,7 +924,7 @@ class CurrencyManager
                 try {
                     // Получаем курс через API
                     $rate = $this->fetchExchangeRate($this->default_currency, $currency_code);
-                    
+
                     if ($rate) {
                         update_post_meta($currency->ID, 'currency_rate', $rate);
                         $updated++;
@@ -1114,8 +934,6 @@ class CurrencyManager
                 }
             }
 
-            // Очищаем кэш
-            $this->clearCache();
 
             if (!empty($errors)) {
                 wp_send_json_error([
@@ -1127,7 +945,6 @@ class CurrencyManager
             wp_send_json_success([
                 'message' => sprintf('Успешно обновлено валют: %d', $updated)
             ]);
-
         } catch (Exception $e) {
             wp_send_json_error([
                 'message' => 'Ошибка обновления курсов: ' . $e->getMessage()
@@ -1166,8 +983,8 @@ class CurrencyManager
     public function getCurrencies()
     {
         // Получаем текущую валюту
-        $current_currency = $this->getCurrentCurrency();
-        
+        $this->current_currency = $this->getCurrentCurrency();
+
         // Получаем все активные валюты
         $posts = get_posts([
             'post_type' => 'currency',
@@ -1195,8 +1012,8 @@ class CurrencyManager
                 'rate' => get_post_meta($post->ID, 'currency_rate', true),
                 'position' => get_post_meta($post->ID, 'currency_position', true)
             ];
-            
-            if ($code === $current_currency) {
+
+            if ($code === $this->current_currency) {
                 $current = $currency_data;
             } else {
                 $others[] = $currency_data;
@@ -1208,5 +1025,12 @@ class CurrencyManager
             $current ? [$current] : [],
             $others
         );
+    }
+
+    public function init()
+    {
+        if (!isset($_COOKIE[$this->cookie_name])) {
+            $this->setUserCurrency($this->getCurrentCurrency());
+        }
     }
 }

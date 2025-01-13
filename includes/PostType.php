@@ -222,12 +222,6 @@ class PostType {
         // Специальная обработка для чекбоксов
         update_post_meta($post_id, 'auto_update', isset($_POST['auto_update']) ? '1' : '0');
         update_post_meta($post_id, 'is_active', isset($_POST['is_active']) ? '1' : '0');
-
-        // Очищаем кэш
-        if (class_exists('WC_Cache_Helper')) {
-            \WC_Cache_Helper::get_transient_version('product', true);
-            wc_delete_product_transients();
-        }
     }
 
     public function addColumns($columns) {
