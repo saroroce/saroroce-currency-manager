@@ -69,9 +69,17 @@ class CurrencyManager
         add_action('manage_product_posts_custom_column', [$this, 'renderOriginalPriceColumn'], 10, 2);
     }
 
-    private function __clone() {}
+    public function __clone() {}
 
-    private function __wakeup() {}
+    /**
+     * Магический метод для десериализации объекта
+     */
+    public function __wakeup() {
+        if (self::$initialized) {
+            return;
+        }
+        self::$initialized = true;
+    }
 
     public function filterPrice($return, $price, $args, $unformatted_price, $original_price)
     {
