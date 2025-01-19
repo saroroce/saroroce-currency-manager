@@ -26,7 +26,7 @@ jQuery(document).ready(function ($) {
                 if (!isBot) {
                     let currentUrl = (window.location.href).split('/');
                     if (currentLang === 'en') {
-                        currentUrl.splice(3, 0, browserLangGroup);
+                        currentUrl[3] = '';
                     } else {
                         currentUrl[3] = browserLangGroup;
                     }
