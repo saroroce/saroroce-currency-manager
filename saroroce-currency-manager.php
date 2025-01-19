@@ -211,3 +211,7 @@ add_action('init', function() {
         header('X-No-Cache: ' . rand());
     }
 }, 0);
+
+add_action('wp_enqueue_scripts', function() {
+    wp_enqueue_script('scm-frontend', SCM_URL . 'assets/js/frontend.js', ['jquery'], SCM_VERSION, true);
+});
