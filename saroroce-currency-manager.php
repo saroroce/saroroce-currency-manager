@@ -28,6 +28,9 @@ define('SCM_FILE', __FILE__);
 define('SCM_PATH', plugin_dir_path(SCM_FILE));
 define('SCM_URL', plugin_dir_url(SCM_FILE));
 
+// Подключаем глобальные функции
+require_once plugin_dir_path(__FILE__) . 'includes/functions.php';
+
 // Автозагрузка классов
 spl_autoload_register(function ($class) {
     $prefix = 'Saroroce\\CurrencyManager\\';

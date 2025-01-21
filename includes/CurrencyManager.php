@@ -31,9 +31,6 @@ class CurrencyManager
 
         $this->default_currency = get_woocommerce_currency();
 
-        // Добавляем глобальные функции
-        // $this->addGlobalFunctions();
-
         // Добавляем обработку параметра new_currency
         add_action('init', [$this, 'handleCurrencyParameter']);
 
@@ -41,12 +38,13 @@ class CurrencyManager
         add_action('wp_loaded', [$this, 'maybeSetCurrencyByIp'], 20);
 
         // Основные фильтры для цен WooCommerce
-        add_filter('woocommerce_product_get_price', [$this, 'convertProductPrice'], 10, 2);
-        add_filter('woocommerce_product_get_regular_price', [$this, 'convertProductPrice'], 10, 2);
-        add_filter('woocommerce_product_get_sale_price', [$this, 'convertProductPrice'], 10, 2);
-        add_filter('woocommerce_product_variation_get_price', [$this, 'convertProductPrice'], 10, 2);
-        add_filter('woocommerce_product_variation_get_regular_price', [$this, 'convertProductPrice'], 10, 2);
-        add_filter('woocommerce_product_variation_get_sale_price', [$this, 'convertProductPrice'], 10, 2);
+        // add_filter('woocommerce_product_get_price', [$this, 'convertProductPrice'], 10, 2);
+        // add_filter('woocommerce_product_get_regular_price', [$this, 'convertProductPrice'], 10, 2);
+        // add_filter('woocommerce_product_get_sale_price', [$this, 'convertProductPrice'], 10, 2);
+        add_filter('wc_price', [$this, 'filterPrice'], 10, 5);
+        // add_filter('woocommerce_product_variation_get_price', [$this, 'convertProductPrice'], 10, 2);
+        // add_filter('woocommerce_product_variation_get_regular_price', [$this, 'convertProductPrice'], 10, 2);
+        // add_filter('woocommerce_product_variation_get_sale_price', [$this, 'convertProductPrice'], 10, 2);
 
         // Фильтры для отображения
         add_filter('woocommerce_currency_symbol', [$this, 'filterWoocommerceCurrencySymbol'], 10, 2);
@@ -1038,5 +1036,32 @@ class CurrencyManager
         if (!isset($_COOKIE[$this->cookie_name])) {
             $this->setUserCurrency($this->getCurrentCurrency());
         }
+    }
+
+    /**
+     * Конвертирует сумму в текущую валюту без форматирования
+     * @param float $amount Сумма для конвертации
+     * @return float Сконвертированная сумма
+     */
+    public function convertAmount($amount)
+    {
+        if (empty($amount) || !is_numeric($amount)) {
+            return $amount;
+        }
+
+        $current_currency = $this->getCurrentCurrency();
+
+        // Если текущая валюта совпадает с основной - возвращаем исходное значение
+        if ($current_currency === $this->default_currency) {
+            return $amount;
+        }
+
+        // Получаем курс валюты
+        $rate = $this->getCurrencyRate($current_currency);
+        if (!$rate) {
+            return $amount;
+        }
+
+        return $amount * floatval($rate);
     }
 }
