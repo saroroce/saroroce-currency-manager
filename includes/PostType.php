@@ -168,10 +168,11 @@ class PostType {
                 <th><label for="currency_position">Позиция символа</label></th>
                 <td>
                     <select name="currency_position" id="currency_position" <?php echo $is_base ? 'disabled' : ''; ?>>
-                        <option value="left" <?php selected($position, 'left'); ?>>Слева (P99.99)</option>
-                        <option value="right" <?php selected($position, 'right'); ?>>Справа (99.99P)</option>
-                        <option value="left_space" <?php selected($position, 'left_space'); ?>>Слева с пробелом (P 99.99)</option>
-                        <option value="right_space" <?php selected($position, 'right_space'); ?>>Справа с пробелом (99.99 P)</option>
+                        <option value="default">Стандартное из WooCommerce</option>
+                        <option value="left" <?php selected($position, 'left'); ?>>Слева</option>
+                        <option value="right" <?php selected($position, 'right'); ?>>Справа</option>
+                        <option value="left_space" <?php selected($position, 'left_space'); ?>>Слева с пробелом</option>
+                        <option value="right_space" <?php selected($position, 'right_space'); ?>>Справа с пробелом</option>
                     </select>
                     <?php if ($is_base): ?>
                         <input type="hidden" name="currency_position" value="<?php echo esc_attr($position); ?>">
@@ -280,79 +281,13 @@ class PostType {
             'Настройки',
             'manage_options',
             'currency-settings',
-            [$this, 'renderSettingsPage']
         );
     }
 
     public function registerSettings() {
-        register_setting('currency_settings', 'currency_auto_update_enabled');
-        register_setting('currency_settings', 'currency_update_interval');
-        register_setting('currency_settings', 'scm_auto_detect_currency');
-    }
-
-    public function renderSettingsPage() {
-        ?>
-        <div class="wrap">
-            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-
-            <div class="currency-settings-page">
-                <!-- Добавляем кнопки -->
-                <div class="currency-actions">
-                    <button type="button" id="import-currencies" class="button button-primary">
-                        <span class="dashicons dashicons-download"></span>
-                        Импортировать валюты
-                    </button>
-                    <button type="button" id="update-rates-manual" class="button button-primary">
-                        <span class="dashicons dashicons-update"></span>
-                        Обновить курсы валют
-                    </button>
-                </div>
-
-                <form method="post" action="options.php">
-                    <?php
-                    settings_fields('currency_settings');
-                    $auto_update = get_option('currency_auto_update_enabled', '0');
-                    $interval = get_option('currency_update_interval', 'daily');
-                    ?>
-
-                    <table class="form-table">
-                        <tr>
-                            <th scope="row">Автоматическое обновление курсов</th>
-                            <td>
-                                <label>
-                                    <input type="checkbox" name="currency_auto_update_enabled" value="1" <?php checked($auto_update, '1'); ?>>
-                                    Включить автоматическое обновление курсов валют
-                                </label>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <th scope="row">Автоопределение валюты</th>
-                            <td>
-                                <label>
-                                    <input type="checkbox" name="scm_auto_detect_currency" value="1" <?php checked(get_option('scm_auto_detect_currency', '0'), '1'); ?>>
-                                    Включить автоматическое определение валюты по стране посетителя
-                                </label>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <th scope="row">Интервал обновления</th>
-                            <td>
-                                <select name="currency_update_interval">
-                                    <option value="hourly" <?php selected($interval, 'hourly'); ?>>Каждый час</option>
-                                    <option value="twicedaily" <?php selected($interval, 'twicedaily'); ?>>Два раза в день</option>
-                                    <option value="daily" <?php selected($interval, 'daily'); ?>>Раз в день</option>
-                                </select>
-                            </td>
-                        </tr>
-                    </table>
-
-                    <?php submit_button(); ?>
-                </form>
-            </div>
-        </div>
-        <?php
+        // Удаляем дублирующиеся настройки
+        // register_setting('currency_settings', 'currency_auto_update_enabled');
+        // register_setting('currency_settings', 'currency_update_interval');
     }
 
     public function updateAllRates() {
@@ -849,6 +784,7 @@ class PostType {
                 <th><label for="currency_position">Позиция символа</label></th>
                 <td>
                     <select name="currency_position" id="currency_position" <?php echo $is_default ? 'disabled' : ''; ?>>
+                        <option value="default">Стандартное из WooCommerce</option>
                         <option value="left" <?php selected($position, 'left'); ?>>Слева</option>
                         <option value="right" <?php selected($position, 'right'); ?>>Справа</option>
                         <option value="left_space" <?php selected($position, 'left_space'); ?>>Слева с пробелом</option>

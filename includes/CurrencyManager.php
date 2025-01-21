@@ -530,25 +530,23 @@ class CurrencyManager
     public function getPriceFormat($format, $currency_pos)
     {
         $currency = $this->getCurrentCurrency();
-
+        
         $currencies = get_posts([
             'post_type' => 'currency',
             'posts_per_page' => 1,
             'meta_query' => [
-                'relation' => 'AND',
                 [
                     'key' => 'currency_code',
                     'value' => $currency
-                ],
-                [
-                    'key' => 'is_active',
-                    'value' => '1'
                 ]
             ]
         ]);
 
         if (!empty($currencies)) {
             $position = get_post_meta($currencies[0]->ID, 'currency_position', true);
+            if ($position === 'default') {
+                return $format; // Возвращаем стандартный формат WooCommerce
+            }
             if ($position) {
                 switch ($position) {
                     case 'left':

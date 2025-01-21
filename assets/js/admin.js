@@ -124,4 +124,32 @@ jQuery(document).ready(function($) {
             }
         });
     });
+
+    // Обработчик для кнопки сброса отображения валют
+    $('#reset-currency-display').on('click', function() {
+        var $button = $(this);
+        $button.prop('disabled', true);
+
+        $.ajax({
+            url: scmAdmin.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'reset_currency_display',
+                nonce: scmAdmin.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.data.message);
+                } else {
+                    alert(response.data.message || 'Произошла ошибка при сбросе отображения валют');
+                }
+            },
+            error: function() {
+                alert('Произошла ошибка при выполнении запроса');
+            },
+            complete: function() {
+                $button.prop('disabled', false);
+            }
+        });
+    });
 }); 
