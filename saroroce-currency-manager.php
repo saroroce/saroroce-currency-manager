@@ -188,3 +188,29 @@ if (!function_exists('scm_get_original_sale_price')) {
         return \Saroroce\CurrencyManager\CurrencyManager::getInstance()->getOriginalSalePrice($product_id, $formatted);
     }
 }
+
+add_action('init', function() {
+    if (!is_admin()) {
+        // Отключаем кэширование на уровне WordPress
+        if (!defined('DONOTCACHEPAGE')) {
+            define('DONOTCACHEPAGE', true);
+        }
+        if (!defined('DONOTCACHEOBJECT')) {
+            define('DONOTCACHEOBJECT', true);
+        }
+        if (!defined('DONOTCACHEDB')) {
+            define('DONOTCACHEDB', true);
+        }
+        
+        // Устанавливаем заголовки для запрета кэширования
+        header_remove('Last-Modified');
+        header_remove('ETag');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Cache-Control: post-check=0, pre-check=0', false);
+        header('Pragma: no-cache');
+        header('Expires: Sun, 01 Jan 1984 00:00:00 GMT');
+        
+        // Добавляем случайное число для предотвращения кэширования
+        header('X-No-Cache: ' . rand());
+    }
+}, 0);
