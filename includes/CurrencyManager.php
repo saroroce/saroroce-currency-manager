@@ -174,7 +174,6 @@ class CurrencyManager
         // Всегда устанавливаем актуальные заголовки если возможно
         if (!headers_sent()) {
             header_remove('X-' . $this->cookie_name); // Удаляем старый заголовок если есть
-            header('Cache-Control: no-store, private');
             header('Vary: Cookie, X-' . $this->cookie_name);
             header('X-' . $this->cookie_name . ': ' . $current_currency);
         }
